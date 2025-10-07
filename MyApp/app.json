@@ -19,7 +19,10 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "usesCleartextTraffic": true,
+      "permissions": ["android.permission.CAMERA"],
+      "package": "com.gervais6.mobileeasypresence"
     },
     "web": {
       "output": "static",
@@ -44,6 +47,14 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "52435008-a12b-4aaa-89ba-40f30fc8fe2e"
+      }
+    },
+    "owner": "gervais1"
   }
 }
+
