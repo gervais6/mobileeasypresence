@@ -10,7 +10,6 @@ import {
   Platform,
   Modal,
   Switch,
-  Vibration,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -90,18 +89,18 @@ export default function ScanScreen() {
     outputRange: ["rgba(255,255,255,0.2)", "rgba(154,97,109,0.5)"],
   });
 
-  // 🧠 Récupération user data
+  // 🧠 Récupération user data (EMAIL + PASSWORD depuis AsyncStorage)
   useEffect(() => {
     const fetchUserData = async () => {
       const email = await AsyncStorage.getItem("email");
       const password = await AsyncStorage.getItem("password");
       setUserData({
-        email: email || "user@example.com",
-        password: password ? "********" : "",
+        email: email || "",
+        password: password || "",
       });
     };
     fetchUserData();
-  }, []);
+  }, [modalVisible]); // on recharge quand modal s'ouvre/ferme (pratique si changé)
 
   const handleLogout = async () => {
     await AsyncStorage.clear();
@@ -150,10 +149,13 @@ export default function ScanScreen() {
 
       Toast.show({ type: "success", text1: response.data.message || "Présence enregistrée !" });
 
+      // ✅ Délai pour animation avant redirection vers PIN
       setTimeout(() => {
         setSuccessScan(false);
         setScanned(false);
+        router.replace("/pin-login"); // ← Redirection vers PIN
       }, 1500);
+
     } catch (err: any) {
       const errorMsg = err.response?.data?.message || "Erreur lors du scan";
       Toast.show({ type: "error", text1: errorMsg });
@@ -230,23 +232,23 @@ export default function ScanScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Modal */}
+      {/* Modal utilisateur — affiche email et mot de passe récupérés */}
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalBackground}>
           <LinearGradient colors={["#4A2C2A", "#9A616D"]} start={[0, 0]} end={[0, 1]} style={styles.modalContainer}>
             <View style={styles.modalHandle} />
             <View style={styles.avatarContainer}>
               <Ionicons name="person-circle-outline" size={80} color="#fff" />
-              <Text style={styles.modalTitle}>John Doe</Text>
+              <Text style={styles.modalTitle}>Utilisateur</Text>
             </View>
 
             <View style={styles.iconRow}>
               <MaterialIcons name="email" size={24} color="#fff" />
-              <Text style={styles.modalText}>{userData.email}</Text>
+              <Text style={styles.modalText}>{userData.email || "Non défini"}</Text>
             </View>
             <View style={styles.iconRow}>
               <Ionicons name="key-outline" size={24} color="#fff" />
-              <Text style={styles.modalText}>{userData.password}</Text>
+              <Text style={styles.modalText}>{userData.password || "Non défini"}</Text>
             </View>
             <View style={styles.iconRow}>
               <Ionicons name="notifications-outline" size={24} color="#fff" />
