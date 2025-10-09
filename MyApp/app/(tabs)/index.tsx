@@ -10,16 +10,14 @@ export default function Index() {
       const token = await AsyncStorage.getItem("token");
 
       if (token) {
-        // Si déjà connecté, redirige vers Scan
-        router.replace("./scan");
+        router.replace("/scan"); // Expo Router recommande "/" pour le chemin racine
       } else {
-        // Sinon, reste sur login
-        router.replace("./login");
+        router.replace("/login");
       }
     };
 
     checkLogin();
   }, []);
 
-  return null; // écran vide, juste redirection
+  return null;
 }

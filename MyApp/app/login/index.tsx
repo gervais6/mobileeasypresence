@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,13 +9,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
+  Animated,
 } from "react-native";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 
-const { width, height } = Dimensions.get("window");
+const { width } = Dimensions.get("window");
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -27,6 +29,26 @@ export default function LoginScreen() {
   const router = useRouter();
 
   const API_URL = "https://backendeasypresence.onrender.com/api/auth/login";
+
+  // Animation des vagues
+  const waveAnim1 = useRef(new Animated.Value(0)).current;
+  const waveAnim2 = useRef(new Animated.Value(0)).current;
+  const waveAnim3 = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animateWave = (anim: Animated.Value, duration: number) => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(anim, { toValue: 20, duration, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: -20, duration, useNativeDriver: true }),
+        ])
+      ).start();
+    };
+
+    animateWave(waveAnim1, 4000);
+    animateWave(waveAnim2, 5000);
+    animateWave(waveAnim3, 6000);
+  }, []);
 
   const handleLogin = async () => {
     let valid = true;
@@ -81,69 +103,112 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      {/* --- VAGUES BACKGROUND --- */}
-      <View style={StyleSheet.absoluteFill}>
-        <View style={styles.wave1} />
-        <View style={styles.wave2} />
-      </View>
-
-      {/* --- FORMULAIRE --- */}
-      <View style={styles.inner}>
-        <Text style={styles.title}>Connexion</Text>
-
-        {/* Email */}
-        <View style={styles.inputContainer}>
-          <Ionicons name="mail-outline" size={22} color="#fff" style={styles.icon} />
-          <TextInput
-            placeholder="Email"
-            placeholderTextColor="rgba(255,255,255,0.7)"
-            value={email}
-            onChangeText={setEmail}
-            style={styles.input}
-            autoCapitalize="none"
-            keyboardType="email-address"
+      <LinearGradient
+        colors={["#4A2C2A", "#9A616D"]}
+        start={[0, 0]}
+        end={[0, 1]}
+        style={styles.container}
+      >
+        {/* --- VAGUES ANIMÉES --- */}
+        <View style={StyleSheet.absoluteFill}>
+          <Animated.View
+            style={[
+              styles.wave1,
+              { transform: [{ translateX: waveAnim1 }] },
+            ]}
+          />
+          <Animated.View
+            style={[
+              styles.wave2,
+              { transform: [{ translateX: waveAnim2 }] },
+            ]}
+          />
+          <Animated.View
+            style={[
+              styles.wave3,
+              { transform: [{ translateX: waveAnim3 }] },
+            ]}
           />
         </View>
-        {emailError ? <Text style={styles.error}>{emailError}</Text> : null}
 
-        {/* Mot de passe */}
-        <View style={styles.inputContainer}>
-          <Ionicons name="lock-closed-outline" size={22} color="#fff" style={styles.icon} />
-          <TextInput
-            placeholder="Mot de passe"
-            placeholderTextColor="rgba(255,255,255,0.7)"
-            value={password}
-            onChangeText={setPassword}
-            style={styles.input}
-            secureTextEntry={!showPassword}
-          />
-          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+        {/* --- FORMULAIRE --- */}
+        <View style={styles.inner}>
+          <Text style={styles.title}>Connexion</Text>
+
+          {/* Email */}
+          <View
+            style={[
+              styles.inputContainer,
+              emailError ? { borderColor: "#ff6b6b" } : {},
+            ]}
+          >
             <Ionicons
-              name={showPassword ? "eye-off-outline" : "eye-outline"}
+              name="mail-outline"
               size={22}
-              color="#fff"
-              style={styles.iconRight}
+              color={emailError ? "#ff6b6b" : "#fff"}
+              style={styles.icon}
             />
+            <TextInput
+              placeholder="Email"
+              placeholderTextColor="rgba(255,255,255,0.7)"
+              value={email}
+              onChangeText={setEmail}
+              style={styles.input}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+          </View>
+          {emailError ? <Text style={styles.error}>{emailError}</Text> : null}
+
+          {/* Mot de passe */}
+          <View
+            style={[
+              styles.inputContainer,
+              passwordError ? { borderColor: "#ff6b6b" } : {},
+            ]}
+          >
+            <Ionicons
+              name="lock-closed-outline"
+              size={22}
+              color={passwordError ? "#ff6b6b" : "#fff"}
+              style={styles.icon}
+            />
+            <TextInput
+              placeholder="Mot de passe"
+              placeholderTextColor="rgba(255,255,255,0.7)"
+              value={password}
+              onChangeText={setPassword}
+              style={styles.input}
+              secureTextEntry={!showPassword}
+            />
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+              <Ionicons
+                name={showPassword ? "eye-off-outline" : "eye-outline"}
+                size={22}
+                color={passwordError ? "#ff6b6b" : "#fff"}
+                style={styles.iconRight}
+              />
+            </TouchableOpacity>
+          </View>
+          {passwordError ? <Text style={styles.error}>{passwordError}</Text> : null}
+
+          {/* Bouton Connexion */}
+          <TouchableOpacity
+            style={[styles.button, loading && styles.buttonDisabled]}
+            onPress={handleLogin}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#9A616D" />
+            ) : (
+              <Text style={styles.buttonText}>Se connecter</Text>
+            )}
           </TouchableOpacity>
         </View>
-        {passwordError ? <Text style={styles.error}>{passwordError}</Text> : null}
-
-        {/* Bouton Connexion */}
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleLogin}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#9A616D" />
-          ) : (
-            <Text style={styles.buttonText}>Se connecter</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+      </LinearGradient>
     </KeyboardAvoidingView>
   );
 }
@@ -151,7 +216,6 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#9A616D",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 25,
@@ -186,7 +250,7 @@ const styles = StyleSheet.create({
   icon: { marginRight: 5 },
   iconRight: { marginLeft: 5 },
   error: {
-    color: "#fff",
+    color: "#ffb3b3",
     fontSize: 13,
     marginBottom: 10,
     marginLeft: 5,
@@ -198,32 +262,39 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 20,
   },
-  buttonDisabled: {
-    opacity: 0.8,
-  },
-  buttonText: {
-    color: "#9A616D",
-    fontWeight: "bold",
-    fontSize: 18,
-  },
+  buttonDisabled: { opacity: 0.8 },
+  buttonText: { color: "#9A616D", fontWeight: "bold", fontSize: 18 },
+
+  // Vagues animées
   wave1: {
     position: "absolute",
-    top: -50,
-    width: width * 1.5,
-    height: 200,
-    backgroundColor: "#b97b85",
-    borderBottomLeftRadius: width,
-    borderBottomRightRadius: width,
-    transform: [{ rotate: "-15deg" }],
+    top: -70,
+    width: width * 1.6,
+    height: 220,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderBottomLeftRadius: width * 1.2,
+    borderBottomRightRadius: width * 1.2,
+    transform: [{ rotate: "-12deg" }],
   },
   wave2: {
     position: "absolute",
-    top: -80,
-    width: width * 1.5,
-    height: 200,
-    backgroundColor: "#9A616D",
-    borderBottomLeftRadius: width,
-    borderBottomRightRadius: width,
-    transform: [{ rotate: "-20deg" }],
+    top: -90,
+    width: width * 1.8,
+    height: 250,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderBottomLeftRadius: width * 1.3,
+    borderBottomRightRadius: width * 1.3,
+    transform: [{ rotate: "-18deg" }],
+  },
+  wave3: {
+    position: "absolute",
+    top: -110,
+    width: width * 2,
+    height: 280,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderBottomLeftRadius: width * 1.4,
+    borderBottomRightRadius: width * 1.4,
+    transform: [{ rotate: "-22deg" }],
   },
 });
+

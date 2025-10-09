@@ -20,8 +20,9 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "usesCleartextTraffic": true,
-      "permissions": ["android.permission.CAMERA"],
+      "permissions": [
+        "android.permission.CAMERA"
+      ],
       "package": "com.gervais6.mobileeasypresence"
     },
     "web": {
@@ -42,7 +43,8 @@
           }
         }
       ],
-      "expo-barcode-scanner"
+      "expo-barcode-scanner",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -57,4 +59,3 @@
     "owner": "gervais1"
   }
 }
-

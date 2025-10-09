@@ -5,66 +5,121 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
-  ActivityIndicator,
   Animated,
   Easing,
   Platform,
+  Modal,
+  Switch,
+  Vibration,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Toast from "react-native-toast-message";
 import axios from "axios";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { Audio } from "expo-av";
+import * as Haptics from "expo-haptics";
 
 export default function ScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
-  const [scanning, setScanning] = useState(false);
+  const [scanning, setScanning] = useState(true);
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
   const [successScan, setSuccessScan] = useState(false);
-  const { width } = Dimensions.get("window");
+  const [modalVisible, setModalVisible] = useState(false);
+  const [userData, setUserData] = useState({ email: "", password: "" });
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
+  const [torchMode, setTorchMode] = useState<"on" | "off">("off");
+  const [torchAnim] = useState(new Animated.Value(0));
+  const [settingsAnim] = useState(new Animated.Value(0));
+
+  const { width, height } = Dimensions.get("window");
   const router = useRouter();
   const pulseAnim = useRef(new Animated.Value(0)).current;
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
 
-  // 🔄 Animation scanner
+  // 🔄 Animation pulsante
   useEffect(() => {
-    if (scanning) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 800,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 0,
-            duration: 800,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-    } else {
-      pulseAnim.stopAnimation();
-    }
-  }, [scanning]);
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0,
+          duration: 800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
 
-  const pulseScale = pulseAnim.interpolate({
+  const pulseScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.2] });
+
+  // 🔥 Animation icônes
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(torchAnim, { toValue: 1, duration: 1000, useNativeDriver: false }),
+        Animated.timing(torchAnim, { toValue: 0, duration: 1000, useNativeDriver: false }),
+      ])
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(settingsAnim, { toValue: 1, duration: 1500, useNativeDriver: false }),
+        Animated.timing(settingsAnim, { toValue: 0, duration: 1500, useNativeDriver: false }),
+      ])
+    ).start();
+  }, []);
+
+  const torchGlow = torchAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [1, 1.2],
+    outputRange: ["rgba(255,255,255,0.2)", "rgba(255,255,150,0.4)"],
   });
 
-  // ✅ Déconnexion
+  const settingsGlow = settingsAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["rgba(255,255,255,0.2)", "rgba(154,97,109,0.5)"],
+  });
+
+  // 🧠 Récupération user data
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const email = await AsyncStorage.getItem("email");
+      const password = await AsyncStorage.getItem("password");
+      setUserData({
+        email: email || "user@example.com",
+        password: password ? "********" : "",
+      });
+    };
+    fetchUserData();
+  }, []);
+
   const handleLogout = async () => {
-    await AsyncStorage.removeItem("token");
-    await AsyncStorage.removeItem("userId");
+    await AsyncStorage.clear();
     Toast.show({ type: "info", text1: "Déconnexion réussie !" });
     router.replace("/login");
+    setModalVisible(false);
   };
 
-  // ✅ Scan QR
+  const playSound = async () => {
+    try {
+      const { sound } = await Audio.Sound.createAsync(require("../assets/scan-sound.mp3"));
+      setSound(sound);
+      await sound.playAsync();
+    } catch (error) {
+      console.log("Erreur son scan:", error);
+    }
+  };
+
   const handleScanSuccess = async (data: string) => {
     try {
       const token = await AsyncStorage.getItem("token");
@@ -83,6 +138,10 @@ export default function ScanScreen() {
       setLoading(true);
       setSuccessScan(true);
 
+      // 🔔 Son + vibration
+      playSound();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
       const response = await axios.post(
         "https://backendeasypresence.onrender.com/api/scan/scan-company",
         { userId, qrCodeEntreprise: data },
@@ -94,14 +153,12 @@ export default function ScanScreen() {
       setTimeout(() => {
         setSuccessScan(false);
         setScanned(false);
-        setScanning(false);
       }, 1500);
     } catch (err: any) {
-      const errorMsg = err.response?.data?.message || "Erreur lors de la validation du QR code";
+      const errorMsg = err.response?.data?.message || "Erreur lors du scan";
       Toast.show({ type: "error", text1: errorMsg });
       setSuccessScan(false);
       setScanned(false);
-      setScanning(false);
     } finally {
       setLoading(false);
     }
@@ -110,7 +167,7 @@ export default function ScanScreen() {
   if (!permission) return <View />;
   if (!permission.granted) {
     return (
-      <View style={styles.container}>
+      <View style={styles.permissionContainer}>
         <Text style={styles.text}>Autorisation caméra requise</Text>
         <TouchableOpacity onPress={requestPermission} style={styles.button}>
           <Text style={styles.buttonText}>Autoriser</Text>
@@ -120,150 +177,181 @@ export default function ScanScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      {/* 🔒 Icône Déconnexion en haut à droite */}
+    <View style={styles.fullContainer}>
+      <CameraView
+        style={StyleSheet.absoluteFillObject}
+        torch={torchMode}
+        onBarcodeScanned={({ data }) => {
+          if (scanning && !scanned && data) {
+            setScanned(true);
+            handleScanSuccess(data);
+          }
+        }}
+      />
+
+      <LinearGradient
+        colors={["rgba(0,0,0,0.6)", "transparent", "rgba(0,0,0,0.6)"]}
+        style={StyleSheet.absoluteFillObject}
+      />
+
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutIcon}>
-          <Ionicons name="log-out-outline" size={28} color="#fff" />
-        </TouchableOpacity>
+        <Animated.View style={[styles.headerIcon, { backgroundColor: torchGlow }]}>
+          <TouchableOpacity onPress={() => setTorchMode((prev) => (prev === "on" ? "off" : "on"))}>
+            <Ionicons name={torchMode === "on" ? "flash" : "flash-off"} size={26} color="#fff" />
+          </TouchableOpacity>
+        </Animated.View>
+
+        <Animated.View style={[styles.headerIcon, { backgroundColor: settingsGlow }]}>
+          <TouchableOpacity onPress={() => setModalVisible(true)}>
+            <Ionicons name="settings-outline" size={26} color="#fff" />
+          </TouchableOpacity>
+        </Animated.View>
       </View>
 
       <Text style={styles.text}>Scanner le QR code entreprise</Text>
 
-      {scanning ? (
-        <View style={{ position: "relative", width: width * 0.8, height: width * 0.8 }}>
-          <CameraView
-            style={{ width: "100%", height: "100%", borderRadius: 20, overflow: "hidden" }}
-            onBarcodeScanned={({ data }) => {
-              if (!scanned && data) {
-                setScanned(true);
-                handleScanSuccess(data);
-              }
-            }}
-          />
+      <View style={styles.scanFrame}>
+        <Animated.View style={[styles.pulse, { transform: [{ scale: pulseScale }] }]} />
+        {successScan && (
+          <Animated.View style={[styles.successIcon, { transform: [{ scale: pulseScale }] }]}>
+            <Ionicons name="checkmark-done-circle" size={80} color="limegreen" />
+          </Animated.View>
+        )}
+      </View>
 
-          {/* Coins du cadre */}
-          <View style={[styles.corner, { top: 0, left: 0, borderTopWidth: 4, borderLeftWidth: 4 }]} />
-          <View style={[styles.corner, { top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4 }]} />
-          <View style={[styles.corner, { bottom: 0, left: 0, borderBottomWidth: 4, borderLeftWidth: 4 }]} />
-          <View style={[styles.corner, { bottom: 0, right: 0, borderBottomWidth: 4, borderRightWidth: 4 }]} />
-
-          {/* Animation Pulse */}
-          <Animated.View style={[styles.pulse, { transform: [{ scale: pulseScale }] }]} />
-
-          {/* ✅ Icône succès */}
-          {successScan && (
-            <View style={styles.successIcon}>
-              <Text style={{ fontSize: 64 }}>✅</Text>
-            </View>
-          )}
-        </View>
-      ) : (
+      {/* Bouton Scan ON/OFF */}
+      <View style={styles.scanToggleContainer}>
         <TouchableOpacity
-          style={[styles.button, loading && { opacity: 0.6 }]}
-          onPress={() => {
-            setScanning(true);
-            setScanned(false);
-          }}
-          disabled={loading}
+          style={styles.scanToggleButton}
+          onPress={() => setScanning((prev) => !prev)}
         >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Ouvrir le scanner</Text>}
+          <Ionicons name={scanning ? "camera" : "camera-off"} size={32} color="#fff" />
+          <Text style={styles.scanToggleText}>{scanning ? "Désactiver Scan" : "Activer Scan"}</Text>
         </TouchableOpacity>
-      )}
+      </View>
 
-      {scanning && (
-        <TouchableOpacity style={styles.cancelButton} onPress={() => setScanning(false)}>
-          <Text style={styles.cancelText}>Annuler</Text>
-        </TouchableOpacity>
-      )}
+      {/* Modal */}
+      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
+        <View style={styles.modalBackground}>
+          <LinearGradient colors={["#4A2C2A", "#9A616D"]} start={[0, 0]} end={[0, 1]} style={styles.modalContainer}>
+            <View style={styles.modalHandle} />
+            <View style={styles.avatarContainer}>
+              <Ionicons name="person-circle-outline" size={80} color="#fff" />
+              <Text style={styles.modalTitle}>John Doe</Text>
+            </View>
+
+            <View style={styles.iconRow}>
+              <MaterialIcons name="email" size={24} color="#fff" />
+              <Text style={styles.modalText}>{userData.email}</Text>
+            </View>
+            <View style={styles.iconRow}>
+              <Ionicons name="key-outline" size={24} color="#fff" />
+              <Text style={styles.modalText}>{userData.password}</Text>
+            </View>
+            <View style={styles.iconRow}>
+              <Ionicons name="notifications-outline" size={24} color="#fff" />
+              <Switch value={notificationsEnabled} onValueChange={setNotificationsEnabled} />
+            </View>
+            <View style={styles.iconRow}>
+              <Ionicons name="moon-outline" size={24} color="#fff" />
+              <Switch value={darkMode} onValueChange={setDarkMode} />
+            </View>
+            <TouchableOpacity style={styles.iconRow}>
+              <Ionicons name="help-circle-outline" size={24} color="#fff" />
+              <Text style={styles.modalText}>Support / Aide</Text>
+            </TouchableOpacity>
+            <View style={styles.iconRow}>
+              <Ionicons name="log-out-outline" size={24} color="#FFBABA" />
+              <TouchableOpacity onPress={handleLogout}>
+                <Text style={[styles.modalText, { color: "#FFBABA" }]}>Déconnexion</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.closeIconContainer} onPress={() => setModalVisible(false)}>
+              <Ionicons name="close-circle-outline" size={36} color="#fff" />
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#9A616D",
-    padding: 20,
-  },
+  fullContainer: { flex: 1 },
   header: {
     position: "absolute",
     top: Platform.OS === "ios" ? 60 : 40,
-    right: 20,
-    left: 20,
+    left: 0,
+    right: 0,
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    paddingHorizontal: 20,
   },
-  headerTitle: {
+  headerIcon: { padding: 8, borderRadius: 50 },
+  text: {
+    position: "absolute",
+    top: Dimensions.get("window").height * 0.18,
     color: "#fff",
-    fontSize: 22,
-    fontWeight: "700",
-  },
-  logoutIcon: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    padding: 8,
-    borderRadius: 50,
-  },
-  text: { 
-    color: "#fff",
-    fontSize: 20,
-    fontWeight: "600",
-    marginBottom: 20,
+    fontSize: 18,
     textAlign: "center",
+    width: "100%",
   },
-  button: { 
-    backgroundColor: "#fff",
-    padding: 15,
-    borderRadius: 12,
-    minWidth: 220,
-    alignItems: "center",
-  },
-  buttonText: { 
-    color: "#9A616D",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-  cancelButton: {
-    marginTop: 15,
-    backgroundColor: "#fff",
-    padding: 12,
-    borderRadius: 12,
-    minWidth: 160,
-    alignItems: "center",
-  },
-  cancelText: {
-    color: "#9A616D",
-    fontWeight: "bold",
-    fontSize: 14,
-  },
-  corner: {
+  scanFrame: {
     position: "absolute",
-    width: 30,
-    height: 30,
-    borderColor: "#fff",
-    borderRadius: 8,
-  },
-  pulse: {
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    width: "80%",
-    height: "80%",
-    marginLeft: "-40%",
-    marginTop: "-40%",
+    top: Dimensions.get("window").height * 0.3,
+    left: Dimensions.get("window").width * 0.1,
+    width: Dimensions.get("window").width * 0.8,
+    height: Dimensions.get("window").width * 0.8,
     borderRadius: 20,
     borderWidth: 2,
     borderColor: "rgba(255,255,255,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pulse: {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.3)",
   },
   successIcon: {
     position: "absolute",
-    top: "50%",
-    left: "50%",
-    marginLeft: -32,
-    marginTop: -32,
-    zIndex: 999,
+    top: "40%",
+    alignSelf: "center",
   },
+  scanToggleContainer: {
+    position: "absolute",
+    bottom: 40,
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  scanToggleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 30,
+  },
+  scanToggleText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+    marginLeft: 10,
+  },
+  modalBackground: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  modalContainer: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 40 },
+  modalHandle: { width: 50, height: 5, backgroundColor: "#ccc", borderRadius: 3, alignSelf: "center", marginBottom: 15 },
+  avatarContainer: { alignItems: "center", marginBottom: 20 },
+  modalTitle: { fontSize: 22, fontWeight: "700", color: "#fff", marginTop: 10 },
+  iconRow: { flexDirection: "row", alignItems: "center", marginVertical: 10 },
+  modalText: { fontSize: 16, marginLeft: 12, color: "#fff" },
+  closeIconContainer: { position: "absolute", top: 15, right: 15 },
+  permissionContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  button: { backgroundColor: "#fff", padding: 15, borderRadius: 12, marginTop: 10 },
+  buttonText: { color: "#9A616D", fontWeight: "bold" },
 });
