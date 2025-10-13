@@ -197,13 +197,13 @@ export default function ScanScreen() {
       />
 
       <View style={styles.header}>
-        <Animated.View style={[styles.headerIcon, { backgroundColor: torchGlow }]}>
+        <Animated.View style={[styles.headerIcon, { }]}>
           <TouchableOpacity onPress={() => setTorchMode((prev) => (prev === "on" ? "off" : "on"))}>
             <Ionicons name={torchMode === "on" ? "flash" : "flash-off"} size={26} color="#fff" />
           </TouchableOpacity>
         </Animated.View>
 
-        <Animated.View style={[styles.headerIcon, { backgroundColor: settingsGlow }]}>
+        <Animated.View style={[styles.headerIcon, {  }]}>
           <TouchableOpacity onPress={() => setModalVisible(true)}>
             <Ionicons name="settings-outline" size={26} color="#fff" />
           </TouchableOpacity>
@@ -222,15 +222,7 @@ export default function ScanScreen() {
       </View>
 
       {/* Bouton Scan ON/OFF */}
-      <View style={styles.scanToggleContainer}>
-        <TouchableOpacity
-          style={styles.scanToggleButton}
-          onPress={() => setScanning((prev) => !prev)}
-        >
-          <Ionicons name={scanning ? "camera" : "camera-off"} size={32} color="#fff" />
-          <Text style={styles.scanToggleText}>{scanning ? "Désactiver Scan" : "Activer Scan"}</Text>
-        </TouchableOpacity>
-      </View>
+    
 
       {/* Modal utilisateur — affiche email et mot de passe récupérés */}
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>

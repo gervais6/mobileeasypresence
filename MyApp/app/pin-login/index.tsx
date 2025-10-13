@@ -13,6 +13,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Haptics from "expo-haptics"; // ← Import Haptics
 
 export default function PinLoginScreen() {
   const [pin, setPin] = useState("");
@@ -26,23 +27,40 @@ export default function PinLoginScreen() {
   const dotAnimations = useRef([0, 1, 2, 3].map(() => new Animated.Value(0))).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
 
-  // Animation overlay
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(overlayAnim, { toValue: 1, duration: 4000, useNativeDriver: true, easing: Easing.linear }),
-        Animated.timing(overlayAnim, { toValue: 0, duration: 4000, useNativeDriver: true, easing: Easing.linear }),
+        Animated.timing(overlayAnim, {
+          toValue: 1,
+          duration: 4000,
+          useNativeDriver: true,
+          easing: Easing.linear,
+        }),
+        Animated.timing(overlayAnim, {
+          toValue: 0,
+          duration: 4000,
+          useNativeDriver: true,
+          easing: Easing.linear,
+        }),
       ])
     ).start();
   }, []);
 
-  // Animation points PIN
   useEffect(() => {
     if (pin.length > 0) {
       Animated.sequence([
-        Animated.timing(dotAnimations[pin.length - 1], { toValue: 1, duration: 150, useNativeDriver: true }),
-        Animated.timing(dotAnimations[pin.length - 1], { toValue: 0, duration: 150, useNativeDriver: true }),
+        Animated.timing(dotAnimations[pin.length - 1], {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+        Animated.timing(dotAnimations[pin.length - 1], {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true,
+        }),
       ]).start();
+      Haptics.selectionAsync(); // vibration légère à chaque chiffre
     }
   }, [pin]);
 
@@ -51,10 +69,13 @@ export default function PinLoginScreen() {
   }, [pin]);
 
   const handleDigitPress = (digit: string) => {
-    if (pin.length < 4) setPin(prev => prev + digit);
+    if (pin.length < 4) setPin((prev) => prev + digit);
   };
 
-  const handleDelete = () => setPin(prev => prev.slice(0, -1));
+  const handleDelete = () => {
+    setPin((prev) => prev.slice(0, -1));
+    Haptics.selectionAsync(); // vibration légère sur suppression
+  };
 
   const checkPin = async () => {
     try {
@@ -62,15 +83,18 @@ export default function PinLoginScreen() {
       if (!userId) return setPin("");
       const savedPin = await SecureStore.getItemAsync(`userPin_${userId}`);
       if (pin === savedPin) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); // vibration réussite
         router.replace("/scan");
       } else {
         const newAttempts = attempts + 1;
         setAttempts(newAttempts);
         setPin("");
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); // vibration échec
         if (newAttempts >= maxAttempts) setResetStep(true);
       }
     } catch (error) {
       setPin("");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
   };
 
@@ -78,6 +102,7 @@ export default function PinLoginScreen() {
     if (pin.length === 4) {
       setNewPin(pin);
       setPin("");
+      Haptics.selectionAsync();
     }
   };
 
@@ -87,9 +112,16 @@ export default function PinLoginScreen() {
       if (newPin === pin) {
         const userId = await AsyncStorage.getItem("userId");
         if (userId) await SecureStore.setItemAsync(`userPin_${userId}`, newPin);
-        setPin(""); setNewPin(""); setConfirmPin(""); setResetStep(false);
+        setPin("");
+        setNewPin("");
+        setConfirmPin("");
+        setResetStep(false);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
-        setPin(""); setNewPin(""); setConfirmPin("");
+        setPin("");
+        setNewPin("");
+        setConfirmPin("");
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
     }
   };
@@ -102,9 +134,12 @@ export default function PinLoginScreen() {
   ];
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
       <LinearGradient
-        colors={['#4A2C2A', '#9A616D', '#FFB6B9']}
+        colors={["#4A2C2A", "#9A616D", "#FFB6B9"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.container}
@@ -113,25 +148,33 @@ export default function PinLoginScreen() {
         <Animated.View
           style={{
             ...StyleSheet.absoluteFillObject,
-            backgroundColor: 'rgba(255,255,255,0.05)',
-            opacity: overlayAnim.interpolate({ inputRange: [0, 1], outputRange: [0.1, 0.3] }),
+            backgroundColor: "rgba(255,255,255,0.05)",
+            opacity: overlayAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0.1, 0.3],
+            }),
           }}
         />
 
         {!resetStep ? (
           <>
             <Text style={styles.title}>Connexion par PIN</Text>
-            <Text style={styles.subtitle}>Entrez votre code PIN pour continuer</Text>
+            <Text style={styles.subtitle}>
+              Entrez votre code PIN pour continuer
+            </Text>
             {attempts > 0 && (
               <Text style={styles.attemptText}>
-                Il vous reste {maxAttempts - attempts} tentative(s) avant la réinitialisation
+                Il vous reste {maxAttempts - attempts} tentative(s) avant la
+                réinitialisation
               </Text>
             )}
           </>
         ) : !newPin ? (
           <>
             <Text style={styles.title}>Réinitialiser le PIN</Text>
-            <Text style={styles.subtitle}>Entrez votre nouveau PIN (4 chiffres)</Text>
+            <Text style={styles.subtitle}>
+              Entrez votre nouveau PIN (4 chiffres)
+            </Text>
           </>
         ) : (
           <>
@@ -140,16 +183,21 @@ export default function PinLoginScreen() {
           </>
         )}
 
-        {/* Points */}
         <View style={styles.pinContainer}>
           {[0, 1, 2, 3].map((i) => {
-            const scale = dotAnimations[i].interpolate({ inputRange: [0, 1], outputRange: [1, 1.4] });
+            const scale = dotAnimations[i].interpolate({
+              inputRange: [0, 1],
+              outputRange: [1, 1.4],
+            });
             return (
               <Animated.View
                 key={i}
                 style={[
                   styles.pinDot,
-                  pin.length > i && { backgroundColor: "#fff", transform: [{ scale }] },
+                  pin.length > i && {
+                    backgroundColor: "#fff",
+                    transform: [{ scale }],
+                  },
                   {
                     shadowColor: "#fff",
                     shadowOffset: { width: 0, height: 0 },
@@ -163,7 +211,6 @@ export default function PinLoginScreen() {
           })}
         </View>
 
-        {/* Numpad */}
         <View style={styles.numPad}>
           {keys.map((row, rowIndex) => (
             <View key={rowIndex} style={styles.row}>
@@ -171,6 +218,12 @@ export default function PinLoginScreen() {
                 const onPress = () => {
                   if (key === "⌫") handleDelete();
                   else if (key === "OK") {
+                    // ✅ Corrigé : si rien tapé, juste vibration et retour
+                    if (pin.length === 0) {
+                      Haptics.selectionAsync();
+                      return;
+                    }
+
                     if (!resetStep) checkPin();
                     else if (!newPin) handleNewPin();
                     else handleConfirmNewPin();
@@ -179,7 +232,7 @@ export default function PinLoginScreen() {
                 return (
                   <TouchableOpacity
                     key={key}
-                    style={styles.numButton} // tous les boutons identiques
+                    style={styles.numButton}
                     onPress={onPress}
                     activeOpacity={0.7}
                   >
@@ -191,13 +244,18 @@ export default function PinLoginScreen() {
           ))}
         </View>
 
-        {/* Liens */}
         {!resetStep ? (
-          <TouchableOpacity onPress={() => setResetStep(true)} style={{ marginTop: 20 }}>
+          <TouchableOpacity
+            onPress={() => setResetStep(true)}
+            style={{ marginTop: 20 }}
+          >
             <Text style={styles.linkText}>Mot de passe oublié ?</Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity onPress={() => setResetStep(false)} style={{ marginTop: 20 }}>
+          <TouchableOpacity
+            onPress={() => setResetStep(false)}
+            style={{ marginTop: 20 }}
+          >
             <Text style={styles.linkText}>Revenir à la connexion</Text>
           </TouchableOpacity>
         )}
@@ -210,7 +268,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20 },
   title: { color: "#fff", fontSize: 22, fontWeight: "800", marginBottom: 10 },
   subtitle: { color: "#fff", fontSize: 14, marginBottom: 30, textAlign: "center" },
-  attemptText: { color: "#ff4d4d", marginBottom: 20, fontSize: 14, textAlign: "center", fontWeight: "bold" },
+  attemptText: { color: "#fff", marginBottom: 20, fontSize: 14, textAlign: "center", fontWeight: "bold" },
   pinContainer: { flexDirection: "row", justifyContent: "space-between", width: "60%", marginBottom: 40 },
   pinDot: { width: 22, height: 22, borderRadius: 11, borderWidth: 1, borderColor: "#fff" },
   numPad: { width: "80%" },
