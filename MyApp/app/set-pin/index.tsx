@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated,
+  Easing,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
@@ -20,6 +21,17 @@ export default function SetPinScreen() {
   const router = useRouter();
 
   const dotAnimations = useRef([0, 1, 2, 3].map(() => new Animated.Value(0))).current;
+  const overlayAnim = useRef(new Animated.Value(0)).current;
+
+  // Animation overlay
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(overlayAnim, { toValue: 1, duration: 4000, useNativeDriver: true, easing: Easing.linear }),
+        Animated.timing(overlayAnim, { toValue: 0, duration: 4000, useNativeDriver: true, easing: Easing.linear }),
+      ])
+    ).start();
+  }, []);
 
   // Animation des points
   useEffect(() => {
@@ -79,12 +91,26 @@ export default function SetPinScreen() {
     ["1", "2", "3"],
     ["4", "5", "6"],
     ["7", "8", "9"],
-    ["⌫", "0", "✔️"]
+    ["⌫", "0", "ok"],
   ];
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <LinearGradient colors={["#4A2C2A", "#9A616D"]} start={[0, 0]} end={[0, 1]} style={styles.container}>
+      <LinearGradient
+        colors={['#4A2C2A', '#9A616D', '#FFB6B9']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.container}
+      >
+        {/* Overlay animé */}
+        <Animated.View
+          style={{
+            ...StyleSheet.absoluteFillObject,
+            backgroundColor: 'rgba(255,255,255,0.05)',
+            opacity: overlayAnim.interpolate({ inputRange: [0, 1], outputRange: [0.1, 0.3] }),
+          }}
+        />
+
         <Text style={styles.title}>{step === 1 ? "Créer un code PIN" : "Confirmer le code PIN"}</Text>
         <Text style={styles.subtitle}>Entrez un code PIN à 4 chiffres</Text>
 
@@ -98,6 +124,13 @@ export default function SetPinScreen() {
                 style={[
                   styles.pinDot,
                   pin.length > i && { backgroundColor: "#fff", transform: [{ scale }] },
+                  {
+                    shadowColor: "#fff",
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.8,
+                    shadowRadius: 8,
+                    elevation: 5,
+                  },
                 ]}
               />
             );
@@ -111,13 +144,13 @@ export default function SetPinScreen() {
               {row.map((key) => {
                 const onPress = () => {
                   if (key === "⌫") handleDelete();
-                  else if (key === "✔️") handleNext(); // bouton manuel
+                  else if (key === "ok") handleNext(); // bouton uniforme
                   else handleDigitPress(key);
                 };
                 return (
                   <TouchableOpacity
                     key={key}
-                    style={[styles.numButton, key === "✔️" && styles.submitButton]}
+                    style={styles.numButton} // tous les boutons identiques
                     onPress={onPress}
                     activeOpacity={0.7}
                   >
@@ -135,8 +168,8 @@ export default function SetPinScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20 },
-  title: { color: "#fff", fontSize: 28, fontWeight: "700", marginBottom: 10 },
-  subtitle: { color: "#fff", fontSize: 16, marginBottom: 30, textAlign: "center" },
+  title: { color: "#fff", fontSize: 22, fontWeight: "800", marginBottom: 10 },
+  subtitle: { color: "#fff", fontSize: 14, marginBottom: 30, textAlign: "center" },
   pinContainer: { flexDirection: "row", justifyContent: "space-between", width: "60%", marginBottom: 40 },
   pinDot: { width: 22, height: 22, borderRadius: 11, borderWidth: 1, borderColor: "#fff" },
   numPad: { width: "80%" },
@@ -149,6 +182,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  submitButton: { backgroundColor: "#9A616D" },
   numText: { color: "#fff", fontSize: 26, fontWeight: "700" },
 });

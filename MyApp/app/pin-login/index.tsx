@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated,
+  Easing,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
@@ -16,15 +17,26 @@ import { LinearGradient } from "expo-linear-gradient";
 export default function PinLoginScreen() {
   const [pin, setPin] = useState("");
   const [attempts, setAttempts] = useState(0);
-  const [resetStep, setResetStep] = useState(false); // false: login, true: réinitialisation
+  const [resetStep, setResetStep] = useState(false);
   const [newPin, setNewPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
-  const maxAttempts = 3; // max tentatives
+  const maxAttempts = 3;
   const router = useRouter();
 
   const dotAnimations = useRef([0, 1, 2, 3].map(() => new Animated.Value(0))).current;
+  const overlayAnim = useRef(new Animated.Value(0)).current;
 
-  // Animation des points
+  // Animation overlay
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(overlayAnim, { toValue: 1, duration: 4000, useNativeDriver: true, easing: Easing.linear }),
+        Animated.timing(overlayAnim, { toValue: 0, duration: 4000, useNativeDriver: true, easing: Easing.linear }),
+      ])
+    ).start();
+  }, []);
+
+  // Animation points PIN
   useEffect(() => {
     if (pin.length > 0) {
       Animated.sequence([
@@ -34,7 +46,6 @@ export default function PinLoginScreen() {
     }
   }, [pin]);
 
-  // Validation automatique uniquement pour login
   useEffect(() => {
     if (!resetStep && pin.length === 4) checkPin();
   }, [pin]);
@@ -43,17 +54,12 @@ export default function PinLoginScreen() {
     if (pin.length < 4) setPin(prev => prev + digit);
   };
 
-  const handleDelete = () => {
-    setPin(prev => prev.slice(0, -1));
-  };
+  const handleDelete = () => setPin(prev => prev.slice(0, -1));
 
   const checkPin = async () => {
     try {
       const userId = await AsyncStorage.getItem("userId");
-      if (!userId) {
-        setPin("");
-        return;
-      }
+      if (!userId) return setPin("");
       const savedPin = await SecureStore.getItemAsync(`userPin_${userId}`);
       if (pin === savedPin) {
         router.replace("/scan");
@@ -61,10 +67,7 @@ export default function PinLoginScreen() {
         const newAttempts = attempts + 1;
         setAttempts(newAttempts);
         setPin("");
-        if (newAttempts >= maxAttempts) {
-          setResetStep(true); // passer à réinitialisation
-          setAttempts(0);
-        }
+        if (newAttempts >= maxAttempts) setResetStep(true);
       }
     } catch (error) {
       setPin("");
@@ -83,18 +86,10 @@ export default function PinLoginScreen() {
       setConfirmPin(pin);
       if (newPin === pin) {
         const userId = await AsyncStorage.getItem("userId");
-        if (userId) {
-          await SecureStore.setItemAsync(`userPin_${userId}`, newPin);
-        }
-        setPin("");
-        setNewPin("");
-        setConfirmPin("");
-        setResetStep(false); // retour à l'écran login
+        if (userId) await SecureStore.setItemAsync(`userPin_${userId}`, newPin);
+        setPin(""); setNewPin(""); setConfirmPin(""); setResetStep(false);
       } else {
-        // PIN ne correspond pas
-        setPin("");
-        setNewPin("");
-        setConfirmPin("");
+        setPin(""); setNewPin(""); setConfirmPin("");
       }
     }
   };
@@ -103,18 +98,30 @@ export default function PinLoginScreen() {
     ["1", "2", "3"],
     ["4", "5", "6"],
     ["7", "8", "9"],
-    ["⌫", "0", "✔️"]
+    ["⌫", "0", "OK"],
   ];
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <LinearGradient colors={["#4A2C2A", "#9A616D"]} start={[0, 0]} end={[0, 1]} style={styles.container}>
+      <LinearGradient
+        colors={['#4A2C2A', '#9A616D', '#FFB6B9']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.container}
+      >
+        {/* Overlay animé */}
+        <Animated.View
+          style={{
+            ...StyleSheet.absoluteFillObject,
+            backgroundColor: 'rgba(255,255,255,0.05)',
+            opacity: overlayAnim.interpolate({ inputRange: [0, 1], outputRange: [0.1, 0.3] }),
+          }}
+        />
+
         {!resetStep ? (
           <>
             <Text style={styles.title}>Connexion par PIN</Text>
             <Text style={styles.subtitle}>Entrez votre code PIN pour continuer</Text>
-
-            {/* Message tentatives restantes */}
             {attempts > 0 && (
               <Text style={styles.attemptText}>
                 Il vous reste {maxAttempts - attempts} tentative(s) avant la réinitialisation
@@ -143,6 +150,13 @@ export default function PinLoginScreen() {
                 style={[
                   styles.pinDot,
                   pin.length > i && { backgroundColor: "#fff", transform: [{ scale }] },
+                  {
+                    shadowColor: "#fff",
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.8,
+                    shadowRadius: 8,
+                    elevation: 5,
+                  },
                 ]}
               />
             );
@@ -156,7 +170,7 @@ export default function PinLoginScreen() {
               {row.map((key) => {
                 const onPress = () => {
                   if (key === "⌫") handleDelete();
-                  else if (key === "✔️") {
+                  else if (key === "OK") {
                     if (!resetStep) checkPin();
                     else if (!newPin) handleNewPin();
                     else handleConfirmNewPin();
@@ -165,7 +179,7 @@ export default function PinLoginScreen() {
                 return (
                   <TouchableOpacity
                     key={key}
-                    style={[styles.numButton, key === "✔️" && styles.submitButton]}
+                    style={styles.numButton} // tous les boutons identiques
                     onPress={onPress}
                     activeOpacity={0.7}
                   >
@@ -177,9 +191,14 @@ export default function PinLoginScreen() {
           ))}
         </View>
 
-        {!resetStep && (
+        {/* Liens */}
+        {!resetStep ? (
           <TouchableOpacity onPress={() => setResetStep(true)} style={{ marginTop: 20 }}>
             <Text style={styles.linkText}>Mot de passe oublié ?</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity onPress={() => setResetStep(false)} style={{ marginTop: 20 }}>
+            <Text style={styles.linkText}>Revenir à la connexion</Text>
           </TouchableOpacity>
         )}
       </LinearGradient>
@@ -189,8 +208,8 @@ export default function PinLoginScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20 },
-  title: { color: "#fff", fontSize: 28, fontWeight: "700", marginBottom: 10 },
-  subtitle: { color: "#fff", fontSize: 16, marginBottom: 30, textAlign: "center" },
+  title: { color: "#fff", fontSize: 22, fontWeight: "800", marginBottom: 10 },
+  subtitle: { color: "#fff", fontSize: 14, marginBottom: 30, textAlign: "center" },
   attemptText: { color: "#ff4d4d", marginBottom: 20, fontSize: 14, textAlign: "center", fontWeight: "bold" },
   pinContainer: { flexDirection: "row", justifyContent: "space-between", width: "60%", marginBottom: 40 },
   pinDot: { width: 22, height: 22, borderRadius: 11, borderWidth: 1, borderColor: "#fff" },
@@ -204,7 +223,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  submitButton: { backgroundColor: "#9A616D" },
   numText: { color: "#fff", fontSize: 26, fontWeight: "700" },
   linkText: { color: "#fff", fontWeight: "600", marginTop: 15 },
 });
